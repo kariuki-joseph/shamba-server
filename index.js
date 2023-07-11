@@ -95,7 +95,7 @@ io.use(function (socket, next) {
 // fired on connection
 io.on("connection", socket => {
 
-    console.log(`${socket.username } has joined`);
+    console.log(`New User join: ${socket.username}`);
     // user has connected. Notify other users
     socket.broadcast.emit("user-connected", {
         userId: socket.userId, 
@@ -127,6 +127,7 @@ io.on("connection", socket => {
 
     // broadcast selection results
     socket.on("selection-results", data => {
+      console.log("selection results", data);
         socket.broadcast.emit("selection-results", data);
     });
 
