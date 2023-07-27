@@ -34,7 +34,9 @@ db.connect((err, res) => {
 
 // session store instance
 const SessionStore = require("./sessionStore");
+const { Plot } = require("./Plot");
 const sessionStore = new SessionStore(db);
+const plot = new Plot(db);
 
 // socket authentication
 io.use(function (socket, next) {
@@ -147,10 +149,62 @@ io.on("connection", (socket) => {
     socket.emit("users", allUsers);
   });
 
+  // send adjacent plots to this client
+  socket.emit("plots", {
+    adjacentPlots: [...plot.getAdjacentPlots()],
+    selectedPlots: [...plot.getSelectedPlots()],
+  });
+
   // broadcast selection results
   socket.on("selection-results", (data) => {
-    console.log("selection results", data);
-    socket.broadcast.emit("selection-results", data);
+    // update plot selection
+    const {number, userId} = data;
+
+    let systemSelectedPlots = [];
+    // check if user can make multiple selections
+    let userData = plot.users.get(userId);
+    if (userData != undefined || userData != null) {
+      let remainingSlots = userData.remainingSlots;
+      // user can select more plots
+      if (remainingSlots != 0) {
+        // check if selected plot has adjacent plot
+        if (plot.hasAdjacent(data.number)) {
+          // plot has adjacent plots. Select them for user
+          const adjacentPlots = plot.plots.get(data.number);
+          systemSelectedPlots = adjacentPlots.slice(0, remainingSlots);
+        } else {
+          console.log("plot has no adjacent plots");
+        }
+      } else {
+        console.log("User has no remaining slots");
+      }
+    }
+
+    // remove selected plot as well as system selected plots
+    plot.removePlot(number);
+    systemSelectedPlots.map(p => plot.removePlot(p));
+
+    // notify everyone of selection results
+    io.emit("selection-results", {
+      ...data,
+      numbers: [number, ...systemSelectedPlots],
+    });
+
+    // send adjacent plots updates to all connected clients
+    io.emit("plots", {
+      adjacentPlots: [...plot.getAdjacentPlots()],
+      selectedPlots: [...plot.getSelectedPlots()],
+    });
+  });
+
+  // restart plots selection
+  socket.on("restart-plot-selection", () => {
+    plot.restartSelection();
+    io.emit("plots", {
+      adjacentPlots: [...plot.getAdjacentPlots()],
+      selectedPlots: [],
+    });
+    socket.emit("plot-selection-restarted");
   });
 
   // notify of user left
