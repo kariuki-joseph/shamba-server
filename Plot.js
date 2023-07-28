@@ -83,9 +83,9 @@ class Plot {
    * Check if a plot has neighboring(adjacent) plots
    * @return {bool} True or false depending on whether the plot has neighbouring plots
    */
-    hasAdjacent(plot) {
-      return this.plots.get(plot).length > 0;
-    }
+  hasAdjacent(plot) {
+    return this.plots.get(plot).length > 0;
+  }
 
   /**
    * Print all plots which have adjacent plots
@@ -105,7 +105,7 @@ class Plot {
    * Get selected plots
    */
 
-   getSelectedPlots() {
+  getSelectedPlots() {
     return this.selectedPlots;
   }
 
@@ -115,7 +115,10 @@ class Plot {
   restartSelection() {
     this.plots = this.createAdjacencyList();
     this.selectedPlots.clear();
-    this.getUserData();
+    this.restartDbSelections((err, res) => {
+      if (err) throw err;
+      this.getUserData();
+    });
   }
 
   // get user data from mysql database
@@ -129,6 +132,15 @@ class Plot {
         });
       });
     });
+  }
+
+  /**
+   * Update database for restart process
+   * @param cb Callback function to run after query is complete
+   */
+  restartDbSelections(cb) {
+    const sql = "UPDATE users SET remaining_slots = max_slots WHERE true";
+    this.db.query(sql, cb());
   }
 }
 
