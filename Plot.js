@@ -141,7 +141,7 @@ class Plot {
    */
   restartDbSelections(cb) {
     // reset remaining slots
-    const sql = "UPDATE users SET remaining_slots = max_slots WHERE true;";
+    const sql = "UPDATE users SET can_select=1, remaining_slots = max_slots WHERE true;";
     this.db.query(sql, (err, res) => {
       if (err) throw err;
       // discard previous selections
