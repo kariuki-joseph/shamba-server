@@ -123,13 +123,14 @@ class Plot {
 
   // get user data from mysql database
   getUserData() {
-    const sql = "SELECT u_id AS userId, max_slots, remaining_slots FROM users";
+    const sql =
+      "SELECT u_id AS userId, max_slots, remaining_slots FROM users WHERE true;";
     this.db.query(sql, (err, rows) => {
       rows.forEach((user) => {
-        this.users.set(user.userId, {
-          maxSlots: user.max_slots,
-          remainingSlots: user.remaining_slots,
-        });
+        const userData = new Map();
+        userData.set("maxSlots", user.max_slots);
+        userData.set("remainingSlots", user.remaining_slots);
+        this.users.set(user.userId, userData);
       });
     });
   }
@@ -139,8 +140,16 @@ class Plot {
    * @param cb Callback function to run after query is complete
    */
   restartDbSelections(cb) {
-    const sql = "UPDATE users SET remaining_slots = max_slots WHERE true";
-    this.db.query(sql, cb());
+    // reset remaining slots
+    const sql = "UPDATE users SET remaining_slots = max_slots WHERE true;";
+    this.db.query(sql, (err, res) => {
+      if (err) throw err;
+      // discard previous selections
+      this.db.query(
+        "UPDATE user_selection SET active = 0 WHERE active=1;",
+        cb()
+      );
+    });
   }
 }
 
