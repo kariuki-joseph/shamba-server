@@ -158,31 +158,42 @@ io.on("connection", (socket) => {
   // broadcast selection results
   socket.on("selection-results", (data) => {
     // update plot selection
-    const {number, userId} = data;
+    const { number, userId } = data;
 
     let systemSelectedPlots = [];
     // check if user can make multiple selections
     let userData = plot.users.get(userId);
+    if (userData.get("remainingSlots") == 0) return;
+
     if (userData != undefined || userData != null) {
-      let remainingSlots = userData.remainingSlots;
       // user can select more plots
-      if (remainingSlots != 0) {
+      while ((remainingSlots = userData.get("remainingSlots")) > 0) {
         // check if selected plot has adjacent plot
         if (plot.hasAdjacent(data.number)) {
           // plot has adjacent plots. Select them for user
           const adjacentPlots = plot.plots.get(data.number);
           systemSelectedPlots = adjacentPlots.slice(0, remainingSlots);
+
+          // update remaining slots info
+          userData.set(
+            "remainingSlots",
+            remainingSlots - (adjacentPlots.length + 1)
+          );
         } else {
+          // remaining slots will only decrement by one
+          userData.set("remainingSlots", remainingSlots - 1);
+          
           console.log("plot has no adjacent plots");
         }
-      } else {
-        console.log("User has no remaining slots");
       }
     }
 
+    plot.users.get(userId).set(userData);
+
     // remove selected plot as well as system selected plots
     plot.removePlot(number);
-    systemSelectedPlots.map(p => plot.removePlot(p));
+    systemSelectedPlots.map((p) => plot.removePlot(p));
+
 
     // notify everyone of selection results
     io.emit("selection-results", {
@@ -202,9 +213,9 @@ io.on("connection", (socket) => {
     plot.restartSelection();
     io.emit("plots", {
       adjacentPlots: [...plot.getAdjacentPlots()],
-      selectedPlots: [],
+      selectedPlots: [...plot.getSelectedPlots()],
     });
-    socket.emit("plot-selection-restarted");
+    io.emit("plot-selection-restarted");
   });
 
   // notify of user left
