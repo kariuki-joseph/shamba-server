@@ -2,8 +2,8 @@
  * Implementation of the land and its plots
  */
 class Plot {
-  constructor(db) {
-    this.db = db;
+  constructor(pool) {
+    this.pool = pool;
     this.plots = this.createAdjacencyList();
     this.selectedPlots = new Set();
     this.users = new Map();
@@ -112,44 +112,44 @@ class Plot {
   /**
    * Restart the plot selection process
    */
-  restartSelection() {
+  async restartSelection() {
     this.plots = this.createAdjacencyList();
     this.selectedPlots.clear();
-    this.restartDbSelections((err, res) => {
-      if (err) throw err;
-      this.getUserData();
-    });
+
+    await this.restartDbSelections();
+
+    await this.getUserData();
   }
 
   // get user data from mysql database
-  getUserData() {
+  async getUserData() {
     const sql =
       "SELECT u_id AS userId, max_slots, remaining_slots FROM users WHERE true;";
-    this.db.query(sql, (err, rows) => {
-      rows.forEach((user) => {
-        const userData = new Map();
-        userData.set("maxSlots", user.max_slots);
-        userData.set("remainingSlots", user.remaining_slots);
-        this.users.set(user.userId, userData);
-      });
+    const connection = await this.pool.getConnection();
+    const [rows, fields] = await connection.execute(sql);
+    connection.release();
+
+    rows.forEach((user) => {
+      const userData = new Map();
+      userData.set("maxSlots", user.max_slots);
+      userData.set("remainingSlots", user.remaining_slots);
+      this.users.set(user.userId, userData);
     });
   }
 
   /**
    * Update database for restart process
-   * @param cb Callback function to run after query is complete
    */
-  restartDbSelections(cb) {
+  async restartDbSelections() {
     // reset remaining slots
-    const sql = "UPDATE users SET can_select=1, remaining_slots = max_slots WHERE true;";
-    this.db.query(sql, (err, res) => {
-      if (err) throw err;
-      // discard previous selections
-      this.db.query(
-        "UPDATE user_selection SET active = 0 WHERE active=1;",
-        cb()
-      );
-    });
+    const sql =
+      "UPDATE users SET can_select=1, remaining_slots = max_slots WHERE true;";
+    const connection = await this.pool.getConnection();
+    const [rows, fields] = await connection.execute(sql);
+    // discard previous selections
+    const sql2 = "UPDATE user_selection SET active = 0 WHERE active=1;";
+    const [rows2, fields2] = await connection.execute(sql2);
+    connection.release();
   }
 }
 
