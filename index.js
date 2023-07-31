@@ -1,7 +1,7 @@
 const http = require("node:http");
 const express = require("express");
 const app = express();
-const mysql = require("mysql");
+const pool = require("./db");
 
 const server = http.createServer(app);
 const cors = require("cors");
@@ -13,30 +13,11 @@ const io = require("socket.io")(server, {
   },
 });
 
-// set up db connection
-const DB_HOST = "localhost";
-const DB_USER = "root";
-const DB_PASSWORD = "";
-const DB_NAME = "landsale_db";
-
-const db = mysql.createConnection({
-  host: DB_HOST,
-  user: DB_USER,
-  password: DB_PASSWORD,
-  database: DB_NAME,
-});
-
-db.connect((err, res) => {
-  if (err) {
-    console.log("Unable to connect to database: ", err);
-  }
-});
-
 // session store instance
 const SessionStore = require("./sessionStore");
 const { Plot } = require("./Plot");
-const sessionStore = new SessionStore(db);
-const plot = new Plot(db);
+const sessionStore = new SessionStore(pool);
+const plot = new Plot(pool);
 
 // socket authentication
 io.use(function (socket, next) {
@@ -163,28 +144,40 @@ io.on("connection", (socket) => {
     let systemSelectedPlots = [];
     // check if user can make multiple selections
     let userData = plot.users.get(userId);
-    if (userData.get("remainingSlots") == 0) return;
+    if (userData == undefined || userData == null) {
+      socket.emit("error", "User not found. Please refresh page");
+      return;
+    }
 
-    if (userData != undefined || userData != null) {
-      // user can select more plots
-      while ((remainingSlots = userData.get("remainingSlots")) > 0) {
-        // check if selected plot has adjacent plot
-        if (plot.hasAdjacent(data.number)) {
-          // plot has adjacent plots. Select them for user
-          const adjacentPlots = plot.plots.get(data.number);
-          systemSelectedPlots = adjacentPlots.slice(0, remainingSlots);
+    if (userData.get("remainingSlots") == 0) {
+      socket.emit("error", "You cannot make any more selections");
+      return;
+    }
 
-          // update remaining slots info
-          userData.set(
-            "remainingSlots",
-            remainingSlots - (adjacentPlots.length + 1)
-          );
-        } else {
-          // remaining slots will only decrement by one
-          userData.set("remainingSlots", remainingSlots - 1);
-          
-          console.log("plot has no adjacent plots");
-        }
+    // check if plot has been selected by another buyer
+    if(plot.getSelectedPlots().has(number)) {
+      socket.emit("error", "Plot has already been selected");
+      return;
+    }
+
+    // user can select more plots
+    while ((remainingSlots = userData.get("remainingSlots")) > 1) {
+      // check if selected plot has adjacent plot
+      if (plot.hasAdjacent(data.number)) {
+        // plot has adjacent plots. Select them for user
+        const adjacentPlots = plot.plots.get(data.number);
+        systemSelectedPlots = adjacentPlots.slice(0, remainingSlots);
+
+        // update remaining slots info
+        userData.set(
+          "remainingSlots",
+          remainingSlots - (adjacentPlots.length + 1)
+        );
+      } else {
+        // remaining slots will only decrement by one
+        userData.set("remainingSlots", remainingSlots - 1);
+
+        console.log("plot has no adjacent plots");
       }
     }
 
@@ -193,7 +186,6 @@ io.on("connection", (socket) => {
     // remove selected plot as well as system selected plots
     plot.removePlot(number);
     systemSelectedPlots.map((p) => plot.removePlot(p));
-
 
     // notify everyone of selection results
     io.emit("selection-results", {
@@ -209,8 +201,9 @@ io.on("connection", (socket) => {
   });
 
   // restart plots selection
-  socket.on("restart-plot-selection", () => {
-    plot.restartSelection();
+  socket.on("restart-plot-selection", async () => {
+    await plot.restartSelection();
+
     io.emit("plots", {
       adjacentPlots: [...plot.getAdjacentPlots()],
       selectedPlots: [...plot.getSelectedPlots()],
