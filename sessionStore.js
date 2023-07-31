@@ -35,10 +35,14 @@ class SessionStore {
    * @param {*} cb
    */
   async saveSession(session, cb) {
-    const sql = "INSERT INTO session SET ?";
+    const keys = Object.keys(session);
+    const values = Object.values(session);
+    const keySet = keys.map((key) => `${key}`).join(", ");
+    const valueSet = keys.map((key) => `?`).join(", ");
+    const sql = `INSERT INTO session (${keySet}) VALUES (${valueSet})`;
     const connection = await this.pool.getConnection();
     try {
-      const [rows, fields] = await connection.execute(sql, [session]);
+      const [rows, fields] = await connection.execute(sql, [...values]);
       if (cb) cb(rows);
     } catch (err) {
       console.log("Save session error: " + err);

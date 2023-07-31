@@ -141,6 +141,8 @@ io.on("connection", (socket) => {
     // update plot selection
     const { number, userId } = data;
 
+    socket.emit("some event here");
+
     let systemSelectedPlots = [];
     // check if user can make multiple selections
     let userData = plot.users.get(userId);
