@@ -104,7 +104,7 @@ io.on("connection", (socket) => {
         userId: user.u_id,
         username: user.username,
         email: user.email,
-        connected: Boolean(user.connected),
+        connected: socket.userId == user.u_id ? true : Boolean(user.connected),
         lastSeen: user.last_seen,
       });
     }
@@ -157,7 +157,7 @@ io.on("connection", (socket) => {
     }
 
     // check if plot has been selected by another buyer
-    if(plot.getSelectedPlots().has(number)) {
+    if (plot.getSelectedPlots().has(number)) {
       socket.emit("error", "Plot has already been selected");
       return;
     }
